@@ -1,0 +1,177 @@
+---
+title: "week3 Project"
+author: "Nadia Gontova"
+date: "2023-11-30"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+
+### DATA
+
+The data used is an NYPD dataset covering a vareity of information on every recorded shooting from 2006 to 2021. The data includes information about the location, victim, and shooter. This is a very large dataset with almost 3000 entires however there is some missing information. Information on the perpetrator is often missing from entries in the dataset. 
+
+```{r get_shooting_data}
+
+if (!require("dplyr")) install.packages("dplyr")
+if (!require("ggplot2")) install.packages("ggplot2")
+library(dplyr)
+library(ggplot2)
+
+# URL
+url_in <- "https://data.cityofnewyork.us/api/views/833y-fsy8/rows.csv?accessType=DOWNLOAD"
+
+# Read the data 
+data <- read.csv(url_in) 
+
+# removed
+columns_to_remove <- c("Latitude", "Longitude", "X_COORD_CD", "Y_COORD_CD", "Lon_Lat", "LOC_OF_OCCUR_DESC", "LOCATION_DESC", "LOC_CLASSFCTN_DESC", "INCIDENT_KEY", "STATISTICAL_MURDER_FLAG", "JURISDICTION_CODE")
+
+#data <- data[, !(names(data) %in% columns_to_remove)]
+#data <- data[data$PERP_AGE_GROUP != "UNKNOWN", ]
+
+
+# Convert OCCUR_DATE to date object
+data$OCCUR_DATE <- as.Date(data$OCCUR_DATE, format = "%m/%d/%Y")
+
+# Convert OCCUR_TIME to time data type
+data$OCCUR_TIME <- as.POSIXct(data$OCCUR_TIME, format = "%H:%M", tz = "UTC")
+
+
+head(data)
+
+summary(data)
+```
+
+
+## Analysis 
+
+```{r shootings_analysis}
+# Group by BORO and calculate # of shootings in each place
+shootings_per_boro <- data %>%
+  group_by(BORO) %>%
+  summarise(NumberOfShootings = n())
+
+print(shootings_per_boro)
+
+# Group data by OCCUR_DATE 
+shootings_over_time <- data %>%
+  group_by(OCCUR_DATE) %>%
+  summarise(NumberOfShootings = n())
+
+print(shootings_over_time)
+
+```
+
+### Plots
+
+
+
+```{r shootings_plots}
+
+# Bar plot
+bar_plot <- ggplot(shootings_per_boro, aes(x = BORO, y = NumberOfShootings)) +
+  geom_bar(stat = "identity", fill = "hotpink") +
+  labs(title = "Shootings by Borough",
+       x = "Borough",
+       y = "# of Shootings")
+
+print(bar_plot)
+
+# line plot
+line_plot <- ggplot(shootings_over_time, aes(x = OCCUR_DATE, y = NumberOfShootings)) +
+  geom_line(color = "pink") +
+  labs(title = "# of Shootings Over Time",
+       x = "Date",
+       y = "# of Shootings") +
+  theme_classic()
+
+print(line_plot)
+
+```
+
+
+```{r model}
+
+shootings_over_time$Time <- 1:nrow(shootings_over_time)
+
+# linear regression model
+linear_model <- lm(NumberOfShootings ~ Time, data = shootings_over_time)
+
+# Prediction
+futuretime <- seq(max(shootings_over_time$Time) + 1, length.out = 365, by = 1)
+
+futuredata <- data.frame(Time=futuretime)
+
+predicted_values <- predict(linear_model, newdata=futuredata)
+
+# Plot
+plot(shootings_over_time$OCCUR_DATE, shootings_over_time$NumberOfShootings, 
+     type = "l", col = "pink", xlab = "Date", ylab = "# of Shootings",
+     main = "Linear Regression")
+lines(shootings_over_time$OCCUR_DATE, fitted(linear_model), col = "red", lty = 2)
+lines(seq(max(shootings_over_time$OCCUR_DATE) + 1, length.out = 365, by = 1), predicted_values, col = "black", lty = 2)
+legend("topright", legend = c("Observed", "Fitted", "Predicted"), col = c("pink", "red", "black"), lty = c(1, 2, 2))
+
+
+brooklyn_data <- data %>%
+  filter(BORO == "BROOKLYN")
+
+# Group data by OCCUR_DATE for Brooklyn
+shootings_over_time_brooklyn <- brooklyn_data %>%
+  group_by(OCCUR_DATE) %>%
+  summarise(NumberOfShootings = n())
+
+# Linear regression model for Brooklyn
+linear_model_brooklyn <- lm(NumberOfShootings ~ as.numeric(OCCUR_DATE - min(shootings_over_time_brooklyn$OCCUR_DATE)), 
+                            data = shootings_over_time_brooklyn)
+
+# Prediction for Brooklyn
+futuretime_brooklyn <- seq(max(shootings_over_time_brooklyn$OCCUR_DATE) + 1, length.out = 365, by = 1)
+futuredata_brooklyn <- data.frame(OCCUR_DATE = futuretime_brooklyn)
+predicted_values_brooklyn <- predict(linear_model_brooklyn, newdata = futuredata_brooklyn)
+
+# Plot for Brooklyn
+plot(shootings_over_time_brooklyn$OCCUR_DATE, shootings_over_time_brooklyn$NumberOfShootings, 
+     type = "l", col = "pink", xlab = "Date", ylab = "# of Shootings",
+     main = "Linear Regression for Brooklyn")
+lines(shootings_over_time_brooklyn$OCCUR_DATE, fitted(linear_model_brooklyn), col = "red", lty = 2)
+lines(futuretime_brooklyn, predicted_values_brooklyn, col = "black", lty = 2)
+legend("topright", legend = c("Observed", "Fitted", "Predicted"), col = c("pink", "red", "black"), lty = c(1, 2, 2))
+
+bronx_data <- data %>%
+  filter(BORO == "BRONX")
+
+# Group data by OCCUR_DATE for the Bronx
+shootings_over_time_bronx <- bronx_data %>%
+  group_by(OCCUR_DATE) %>%
+  summarise(NumberOfShootings = n())
+
+# Linear regression model for the Bronx
+linear_model_bronx <- lm(NumberOfShootings ~ as.numeric(OCCUR_DATE - min(shootings_over_time_bronx$OCCUR_DATE)), 
+                         data = shootings_over_time_bronx)
+
+# Prediction for the Bronx
+futuretime_bronx <- seq(max(shootings_over_time_bronx$OCCUR_DATE) + 1, length.out = 365, by = 1)
+futuredata_bronx <- data.frame(OCCUR_DATE = futuretime_bronx)
+predicted_values_bronx <- predict(linear_model_bronx, newdata = futuredata_bronx)
+
+# Plot for the Bronx
+plot(shootings_over_time_bronx$OCCUR_DATE, shootings_over_time_bronx$NumberOfShootings, 
+     type = "l", col = "pink", xlab = "Date", ylab = "# of Shootings",
+     main = "Linear Regression for Bronx")
+lines(shootings_over_time_bronx$OCCUR_DATE, fitted(linear_model_bronx), col = "red", lty = 2)
+lines(futuretime_bronx, predicted_values_bronx, col = "black", lty = 2)
+legend("topright", legend = c("Observed", "Fitted", "Predicted"), col = c("pink", "red", "black"), lty = c(1, 2, 2))
+```
+
+#Conclusion 
+
+In my analysis I found that Brooklyn and Bronx had the most shootings over the other regions. Staten Island had the least shootings from the five locations. In the graph of shootings over time I did not see any trend so I decided to preform a linear regression on the data. The linear model did not show an increase or decrease in shootings over time and based on this pattern the predicted pattern does not continue to increase or decrease. This aligns with what I visually saw when looking at the data. It is possible that the shootings data follows a different kind of trend and is therefore not well fit to a linear model. 
+
+#biases
+
+One source of bias could be from bias in the data collection. There is no way for me to verify how accuratly the data is collected and if certain entires might be missing. There might be a bais in how the regions are grouped and a small area of crime might not be representative of an entire region. Frthermore shootings in one region could possibly skew the data in a neighboring region due to how the borders are determined. These typed of biases can be reduced by looking into how the data is collected and how accurate the dataset is. 
+
+There are also personal biases as an analyist that might skew the data. For example, knowing certain regions might have higher crime could impact the analysis someone chooses. To reduce this bias I tried to stick to analyzing the dataset as a whole and sticking to know statisical methods from class. 
